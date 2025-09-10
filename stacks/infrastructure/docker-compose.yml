@@ -1,25 +1,26 @@
 version: '3.8'
 
 services:
-  # Docker Socket Proxy
-  # docker-socket-proxy:
-  #   image: tecnativa/docker-socket-proxy:latest
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock:ro
-  #   networks:
-  #     - projektwennerberg-net
-  #   environment:
-  #     # Only enable what is needed
-  #     CONTAINERS: 1
-  #     SERVICES: 1
-  #     TASKS: 1
-  #     SWARM: 1
-  #     NETWORKS: 1
-  #     EVENTS: 1
-  #   deploy:
-  #     placement:
-  #       constraints:
-  #         - node.role == manager
+  #Docker Socket Proxy
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - projektwennerberg-net
+    environment:
+      # Only enable what is needed
+      CONTAINERS: 1
+      NODES: 1
+      SERVICES: 1
+      TASKS: 1
+      SWARM: 1
+      NETWORKS: 1
+      EVENTS: 1
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
 
   # Reverse proxy
   traefik:
@@ -28,11 +29,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-data:/data
     command:
       - "--providers.swarm=true"
       - "--providers.swarm.exposedbydefault=false"
+      - "--providers.swarm.endpoint=tcp://docker-socket-proxy:2375"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
