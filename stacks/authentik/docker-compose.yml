@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Authentik
+  postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      # Hardcoded DB name/user, since Swarm won't expand $${VAR}
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - database:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=authentik
+      - POSTGRES_USER=authentik
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    networks:
+      - projektwennerberg-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  # Redis cache
+  redis:
+    image: redis:alpine
+    command: --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      # Alpine Redis images don't include grep
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - redis:/data
+    networks:
+      - projektwennerberg-net
+
+  # Authentik server
+  server:
+    image: ghcr.io/goauthentik/server:2025.8.1
+    restart: unless-stopped
+    command: server
+    environment:
+      - AUTHENTIK_SECRET_KEY=file:///run/secrets/authentik_secret_key
+      - AUTHENTIK_POSTGRESQL__HOST=postgresql
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD=file:///run/secrets/postgres_password
+      - AUTHENTIK_REDIS__HOST=redis
+    volumes:
+      - authentik-media:/media
+      - authentik-templates:/templates
+    secrets:
+      - authentik_secret_key
+      - postgres_password
+    networks:
+      - projektwennerberg-net
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.authentik.rule=Host(`auth.projektwennerberg.org`)"
+        - "traefik.http.routers.authentik.entrypoints=web"
+        - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+        - "traefik.http.middlewares.authentik-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+        - "traefik.http.routers.authentik.middlewares=authentik-headers"
+  # Background worker
+  worker:
+    image: ghcr.io/goauthentik/server:2025.8.1
+    restart: unless-stopped
+    command: worker
+    user: root
+    environment:
+      - AUTHENTIK_SECRET_KEY=file:///run/secrets/authentik_secret_key
+      - AUTHENTIK_POSTGRESQL__HOST=postgresql
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD=file:///run/secrets/postgres_password
+      - AUTHENTIK_REDIS__HOST=redis
+
+    volumes:
+      - authentik-media:/media
+      - authentik-certs:/certs
+      - authentik-templates:/templates
+    secrets:
+      - authentik_secret_key
+      - postgres_password
+    networks:
+      - projektwennerberg-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+volumes:
+  database:
+  redis:
+  authentik-media:
+  authentik-templates:
+  authentik-certs:
+
+secrets:
+  postgres_password:
+    external: true
+  authentik_secret_key:
+    external: true
+
+networks:
+  projektwennerberg-net:
+    external: true

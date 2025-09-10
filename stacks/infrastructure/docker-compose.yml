@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Docker Socket Proxy
+  # docker-socket-proxy:
+  #   image: tecnativa/docker-socket-proxy:latest
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   networks:
+  #     - projektwennerberg-net
+  #   environment:
+  #     # Only enable what is needed
+  #     CONTAINERS: 1
+  #     SERVICES: 1
+  #     TASKS: 1
+  #     SWARM: 1
+  #     NETWORKS: 1
+  #     EVENTS: 1
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - node.role == manager
+
+  # Reverse proxy
+  traefik:
+    image: traefik:v3.5
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-data:/data
+    command:
+      - "--providers.swarm=true"
+      - "--providers.swarm.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=mhall815@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      - "--accesslog=true"
+    networks:
+      - projektwennerberg-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  # Cloudflare Tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN_FILE=/run/secrets/cloudflared_token
+    secrets:
+      - cloudflared_token
+    networks:
+      - projektwennerberg-net
+    deploy:
+      replicas: 1
+
+  # Portainer
+  # portainer:
+  #   image: portainer/portainer-ce:latest
+  #   command: -H tcp://docker-socket-proxy:2375
+  #   volumes:
+  #     - portainer-data:/data
+  #   networks:
+  #     - projektwennerberg-net
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - node.role == manager
+  #     labels:
+  #       - "traefik.enable=true"
+  #       - "traefik.http.routers.portainer.rule=Host(`portainer.projektwennerberg.org`)"
+  #       - "traefik.http.routers.portainer.entrypoints=websecure"
+  #       - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+  #       - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+volumes:
+  traefik-data:
+  # portainer-data:
+
+secrets:
+  cloudflared_token:
+    external: true
+
+networks:
+  projektwennerberg-net:
+    external: true
