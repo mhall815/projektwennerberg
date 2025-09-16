@@ -1,0 +1,32 @@
+# ./stacks/hello-world/docker-compose.yml
+version: '3.8'
+
+services:
+  hello:
+    image: nginxdemos/hello:latest # A simple Nginx page that says "Hello world"
+    networks:
+      - projektwennerberg-net
+    deploy:
+      labels:
+        # 1. Enable Traefik
+        - "traefik.enable=true"
+
+        # 2. Define the router
+        - "traefik.http.routers.hello.rule=Host(`projektwennerberg.org`)"
+        - "traefik.http.routers.hello.entrypoints=websecure"
+        - "traefik.http.routers.hello.tls.certresolver=letsencrypt"
+
+        # 3. Define the service
+        - "traefik.http.services.hello.loadbalancer.server.port=80"
+
+        # 4. Define the Authentik forwardAuth middleware
+        - "traefik.http.middlewares.authentik-guard.forwardauth.address=https://auth.projektwennerberg.org/outpost.goauthentik.io/auth/traefik"
+        - "traefik.http.middlewares.authentik-guard.forwardauth.trustForwardHeader=true"
+        - "traefik.http.middlewares.authentik-guard.forwardauth.authResponseHeaders=X-authentik-username, X-authentik-groups, X-authentik-email, X-authentik-name, X-authentik-uid"
+
+        # 5. Apply the middleware to the router
+        - "traefik.http.routers.hello.middlewares=authentik-guard"
+
+networks:
+  projektwennerberg-net:
+    external: true
