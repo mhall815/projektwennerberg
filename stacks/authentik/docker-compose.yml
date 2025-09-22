@@ -1,12 +1,10 @@
 version: '3.8'
 
 services:
-  # PostgreSQL for Authentik
   postgresql:
     image: postgres:16-alpine
     restart: unless-stopped
     healthcheck:
-      # Hardcoded DB name/user, since Swarm won't expand $${VAR}
       test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
       interval: 30s
       timeout: 5s
@@ -27,13 +25,11 @@ services:
         constraints:
           - node.role == manager
 
-  # Redis cache
   redis:
     image: redis:alpine
     command: --save 60 1 --loglevel warning
     restart: unless-stopped
     healthcheck:
-      # Alpine Redis images don't include grep
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 3s
@@ -44,9 +40,8 @@ services:
     networks:
       - projektwennerberg-net
 
-  # Authentik server
   server:
-    image: ghcr.io/goauthentik/server:2025.8.1
+    image: ghcr.io/goauthentik/server:2025.6.3
     restart: unless-stopped
     command: server
     environment:
@@ -57,8 +52,8 @@ services:
       - AUTHENTIK_POSTGRESQL__PASSWORD=file:///run/secrets/postgres_password
       - AUTHENTIK_REDIS__HOST=redis
     volumes:
-      - authentik-media:/media
-      - authentik-templates:/templates
+      - ./media:/media
+      - ./custom-templates:/templates  
     secrets:
       - authentik_secret_key
       - postgres_password
@@ -71,10 +66,11 @@ services:
         - "traefik.http.routers.authentik.entrypoints=web"
         - "traefik.http.services.authentik.loadbalancer.server.port=9000"
         - "traefik.http.middlewares.authentik-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+        - "traefik.http.middlewares.authentik-headers.headers.customrequestheaders.X-Forwarded-For="
         - "traefik.http.routers.authentik.middlewares=authentik-headers"
-  # Background worker
+
   worker:
-    image: ghcr.io/goauthentik/server:2025.8.1
+    image: ghcr.io/goauthentik/server:2025.6.3
     restart: unless-stopped
     command: worker
     user: root
@@ -85,11 +81,9 @@ services:
       - AUTHENTIK_POSTGRESQL__NAME=authentik
       - AUTHENTIK_POSTGRESQL__PASSWORD=file:///run/secrets/postgres_password
       - AUTHENTIK_REDIS__HOST=redis
-
     volumes:
-      - authentik-media:/media
-      - authentik-certs:/certs
-      - authentik-templates:/templates
+      - ./media:/media
+      - ./custom-templates:/templates  
     secrets:
       - authentik_secret_key
       - postgres_password
@@ -103,9 +97,9 @@ services:
 volumes:
   database:
   redis:
-  authentik-media:
-  authentik-templates:
-  authentik-certs:
+  # authentik-media:
+  # authentik-templates:
+  # authentik-certs:
 
 secrets:
   postgres_password:

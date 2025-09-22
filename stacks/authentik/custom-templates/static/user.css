@@ -1,0 +1,20 @@
+/* --- ./stacks/authentik/custom-templates/static/user.css --- */
+
+/* Change the background of the login page */
+body[ak-page="login"] {
+    background-image: url('/static/background.jpg') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+}
+
+Replace the default Authentik logo with your own
+.ak-brand .ak-brand--logo {
+    content: url('/static/logo.png') !important; /* Adjust if you use a different logo file */
+    height: 60px; /* Optional: adjust the height of your logo */
+}
+
+/* You can also hide the logo text if your logo includes it */
+.ak-brand .ak-brand--text {
+    display: none;
+}
